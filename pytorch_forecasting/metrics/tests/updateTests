@@ -1,0 +1,86 @@
+    
+    # Negative test cases: ensure metrics raise proper errors
+   
+
+    @pytest.mark.parametrize("target_type", ["standard", "packed", "weighted"])
+    def test_invalid_shape_raises(self, object_pkg, object_instance, request, target_type):
+        """Ensure metric.update raises error on mismatched y_pred and y shapes."""
+
+        prepared_data = self._setup_metric_test_scenario(
+            object_pkg, object_instance, target_type, request
+        )
+        if prepared_data is None:
+            return None
+
+        metric, y_pred, y = prepared_data
+
+        # create mismatched prediction shape
+        bad_y_pred = y_pred[:, :-1]  # wrong prediction length
+
+        with pytest.raises((ValueError, RuntimeError, AssertionError)):
+            metric.update(bad_y_pred, y)
+
+    @pytest.mark.parametrize("target_type", ["standard", "packed", "weighted"])
+    def test_invalid_dtype_raises(self, object_pkg, object_instance, request, target_type):
+        """Ensure metric.update raises error on wrong dtype."""
+
+        prepared_data = self._setup_metric_test_scenario(
+            object_pkg, object_instance, target_type, request
+        )
+        if prepared_data is None:
+            return None
+
+        metric, y_pred, y = prepared_data
+
+        # convert predictions to integer dtype (invalid for most metrics)
+        bad_y_pred = y_pred.long()
+
+        with pytest.raises((TypeError, ValueError, RuntimeError)):
+            metric.update(bad_y_pred, y)
+
+    def test_compute_before_update_raises(self, object_pkg, object_instance):
+        """Ensure calling compute before update raises an error or returns controlled failure."""
+
+        metric = object_instance
+
+        with pytest.raises((RuntimeError, ValueError, AssertionError)):
+            metric.compute()
+
+    @pytest.mark.parametrize("target_type", ["standard", "packed", "weighted"])
+    def test_invalid_quantiles_raise(self, object_pkg, object_instance, request, target_type):
+        """Ensure invalid quantile values raise errors."""
+
+        prepared_data = self._setup_metric_test_scenario(
+            object_pkg, object_instance, target_type, request
+        )
+        if prepared_data is None:
+            return None
+
+        metric, y_pred, _ = prepared_data
+
+        # only applies where to_quantiles accepts quantiles argument
+        metric_type = object_pkg.get_class_tag("metric_type")
+        if metric_type in ["quantile", "point_classification"]:
+            return None
+
+        bad_quantiles = [1.5, -0.2]  # invalid range
+
+        with pytest.raises((AssertionError, ValueError)):
+            metric.to_quantiles(y_pred, quantiles=bad_quantiles)
+
+    @pytest.mark.parametrize("target_type", ["standard", "packed", "weighted"])
+    def test_invalid_reduction_mode_raises(self, object_pkg, object_instance, request, target_type):
+        """Ensure reduce_loss raises error on invalid reduction mode."""
+
+        prepared_data = self._setup_metric_test_scenario(
+            object_pkg, object_instance, target_type, request
+        )
+        if prepared_data is None:
+            return None
+
+        metric, y_pred, y = prepared_data
+
+        metric.update(y_pred, y)
+
+        with pytest.raises((ValueError, AssertionError)):
+            metric.reduce_loss(metric.losses, metric.lengths, reduction="not-a-mode")
